@@ -38,7 +38,8 @@ import           Ouroboros.Network.Block (MaxSlotNo (..))
 
 data NodeConfiguration
   = NodeConfiguration
-      {  ncNodeAddr        :: !(Maybe NodeAddress)
+      {  ncNodeIPv4Addr    :: !(Maybe NodeIPv4Address)
+      ,  ncNodeIPv6Addr    :: !(Maybe NodeIPv6Address)
           -- | Filepath of the configuration yaml file. This file determines
           -- all the configuration settings required for the cardano node
           -- (logging, tracing, protocol, slot length etc)
@@ -70,7 +71,8 @@ data NodeConfiguration
 
 data PartialNodeConfiguration
   = PartialNodeConfiguration
-      {  pncNodeAddr        :: !(Last NodeAddress)
+      {  pncNodeIPv4Addr    :: !(Last NodeIPv4Address)
+      ,  pncNodeIPv6Addr    :: !(Last NodeIPv6Address)
          -- | Filepath of the configuration yaml file. This file determines
          -- all the configuration settings required for the cardano node
          -- (logging, tracing, protocol, slot length etc)
@@ -150,7 +152,8 @@ instance FromJSON PartialNodeConfiguration where
            , pncLoggingSwitch = Last $ Just pncLoggingSwitch'
            , pncLogMetrics = pncLogMetrics'
            , pncTraceConfig = pncTraceConfig'
-           , pncNodeAddr = mempty
+           , pncNodeIPv4Addr = mempty
+           , pncNodeIPv6Addr = mempty
            , pncConfigFile = mempty
            , pncTopologyFile = mempty
            , pncDatabaseFile = mempty
@@ -241,7 +244,8 @@ defaultPartialNodeConfiguration =
     , pncSocketPath = mempty
     , pncTopologyFile = Last . Just $ TopologyFile "configuration/cardano/mainnet-topology.json"
     , pncViewMode = Last $ Just SimpleView
-    , pncNodeAddr = mempty
+    , pncNodeIPv4Addr = mempty
+    , pncNodeIPv6Addr = mempty
     , pncProtocolFiles = mempty
     , pncValidateDB = mempty
     , pncShutdownIPC = mempty
@@ -274,7 +278,8 @@ makeNodeConfiguration pnc = do
   logMetrics <- lastToEither "Missing LogMetrics" $ pncLogMetrics pnc
   traceConfig <- lastToEither "Missing TraceConfig" $ pncTraceConfig pnc
   return $ NodeConfiguration
-             { ncNodeAddr = getLast $ pncNodeAddr pnc
+             { ncNodeIPv4Addr = getLast $ pncNodeIPv4Addr pnc
+             , ncNodeIPv6Addr = getLast $ pncNodeIPv6Addr pnc
              , ncConfigFile = configFile
              , ncTopologyFile = topologyFile
              , ncDatabaseFile = databaseFile
