@@ -12,6 +12,11 @@ module Cardano.CLI.Shelley.Key
   , deserialiseInputAnyOf
   , renderInputDecodeError
 
+  , OutputFormat (..)
+  , OutputDirection (..)
+  , serialiseInput
+  , serialiseInputAndWrite
+
   , readKeyFile
   , readKeyFileAnyOf
   , readKeyFileTextEnvelope
@@ -37,13 +42,15 @@ import           Cardano.Prelude
 
 import           Control.Monad.Trans.Except.Extra (firstExceptT, handleIOExceptT, hoistEither)
 import qualified Data.Aeson as Aeson
+import qualified Data.Aeson.Encode.Pretty as Aeson
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Char8 as BSC
+import qualified Data.ByteString.Lazy as LBS
 import qualified Data.List.NonEmpty as NE
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
 
-import           Cardano.Api.TextView (TextViewError (..))
+import           Cardano.Api.TextView (TextViewError (..), textViewJSONConfig)
 import           Cardano.Api.Typed
 
 import           Cardano.CLI.Types
@@ -231,6 +238,55 @@ deserialiseInputAnyOf bech32Types textEnvTypes inputBs =
 
         -- The input was valid Bech32, but some other error occurred.
         Left err -> DeserialiseInputError $ InputBech32DecodeError err
+
+------------------------------------------------------------------------------
+-- Formatted/encoded output serialisation
+------------------------------------------------------------------------------
+
+-- | Output format/encoding.
+data OutputFormat a where
+  -- | Bech32 encoding.
+  OutputFormatBech32 :: SerialiseAsBech32 a => OutputFormat a
+
+  -- | Hex/Base16 encoding.
+  OutputFormatHex :: SerialiseAsRawBytes a => OutputFormat a
+
+  -- | Text envelope format.
+  -- TODO @intricate: Add 'Maybe' text envelope description.
+  OutputFormatTextEnvelope :: HasTextEnvelope a => OutputFormat a
+
+-- | Where to write some output.
+data OutputDirection
+  = OutputDirectionStdout
+  -- ^ Write output to @stdout@.
+  | OutputDirectionFile !FilePath
+  -- ^ Write output to a provided file.
+  deriving (Eq, Show)
+
+serialiseInput :: OutputFormat a -> a -> ByteString
+serialiseInput outputFormat a =
+  case outputFormat of
+    OutputFormatBech32 -> Text.encodeUtf8 (serialiseToBech32 a)
+    OutputFormatHex -> serialiseToRawBytes a
+    OutputFormatTextEnvelope ->
+      LBS.toStrict $
+        Aeson.encodePretty' textViewJSONConfig (serialiseToTextEnvelope Nothing a)
+          <> "\n"
+
+serialiseInputAndWrite
+  :: OutputFormat a
+  -> OutputDirection
+  -> a
+  -> IO (Either (FileError ()) ())
+serialiseInputAndWrite outputFormat outputDirection a =
+    case outputDirection of
+      OutputDirectionStdout -> Right <$> BSC.putStrLn outputBs
+      OutputDirectionFile fp ->
+        runExceptT $ handleIOExceptT (FileIOError fp) $
+          BS.writeFile fp outputBs
+  where
+    outputBs :: ByteString
+    outputBs = serialiseInput outputFormat a
 
 ------------------------------------------------------------------------------
 -- Cryptographic key deserialisation
