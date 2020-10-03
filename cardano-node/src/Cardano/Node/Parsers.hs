@@ -65,6 +65,7 @@ nodeRunParser = do
            , pncTopologyFile = TopologyFile <$> topFp
            , pncDatabaseFile = DbFile <$> dbFp
            , pncSocketPath   = socketFp
+           , pncDiffusionMode = mempty
            , pncProtocolFiles = Last $ Just ProtocolFilepaths
              { byronCertFile
              , byronKeyFile
