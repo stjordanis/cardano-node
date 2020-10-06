@@ -12,12 +12,18 @@
 
 module Cardano.Node.Run
   ( runNode
+#ifdef linux_HOST_OS
+  , checkVRFFilePermissions
+#endif
   ) where
 
 import           Cardano.Prelude hiding (ByteString, atomically, take, trace)
 import           Prelude (String)
 
 import qualified Control.Concurrent.Async as Async
+#ifdef linux_HOST_OS
+import           Control.Monad.Trans.Except.Extra (left)
+#endif
 import           Control.Tracer
 import qualified Data.ByteString.Char8 as BSC
 import           Data.Either (partitionEithers)
@@ -32,6 +38,10 @@ import           Network.HostName (getHostName)
 import           Network.Socket (AddrInfo, Socket)
 import           System.Directory (canonicalizePath, createDirectoryIfMissing, makeAbsolute)
 import           System.Environment (lookupEnv)
+#ifdef linux_HOST_OS
+import           System.Posix.Files
+import           System.Posix.Types (FileMode)
+#endif
 
 import           Cardano.BM.Data.Aggregated (Measurable (..))
 import           Paths_cardano_node (version)
@@ -101,6 +111,17 @@ runNode cmdPc = do
     nc <- case makeNodeConfiguration $ defaultPartialNodeConfiguration <> configYamlPc <> cmdPc of
             Left err -> panic $ "Error in creating the NodeConfiguration: " <> Text.pack err
             Right nc' -> return nc'
+
+#ifdef linux_HOST_OS
+    case shelleyVRFFile $ ncProtocolFiles nc of
+      Just vrfFp -> do vrf <- runExceptT $ checkVRFFilePermissions vrfFp
+                       case vrf of
+                         Left err ->
+                           putTextLn (renderVRFPrivateKeyFilePermissionError err) >> exitFailure
+                         Right () ->
+                           pure ()
+      Nothing -> pure ()
+#endif
 
     eLoggingLayer <- runExceptT $ createLoggingLayer
                      (Text.pack (showVersion version))
@@ -400,6 +421,31 @@ canonDbPath NodeConfiguration{ncDatabaseFile = DbFile dbFp} = do
   fp <- canonicalizePath =<< makeAbsolute dbFp
   createDirectoryIfMissing True fp
   return fp
+
+#ifdef linux_HOST_OS
+-- | Make sure the VRF private key file is readable only
+-- by the current process owner the node is running under.
+checkVRFFilePermissions ::FilePath -> ExceptT VRFPrivateKeyFilePermissionError IO ()
+checkVRFFilePermissions vrfPrivKey = do
+  fs <- liftIO $ getFileStatus vrfPrivKey
+  let fm = fileMode fs
+  -- Check the the VRF private key file does not give read/write/exec permissions to others.
+  when (hasOtherPermissions fm)
+       (left $ OtherPermissionsExist vrfPrivKey)
+  -- Check the the VRF private key file does not give read/write/exec permissions to any group.
+  when (hasGroupPermissions fm)
+       (left $ GroupPermissionsExist vrfPrivKey)
+ where
+  hasPermission :: FileMode -> FileMode -> Bool
+  hasPermission fModeA fModeB = fModeA `intersectFileModes` fModeB /= nullFileMode
+
+  hasOtherPermissions :: FileMode -> Bool
+  hasOtherPermissions fm' = fm' `hasPermission` otherModes
+
+  hasGroupPermissions :: FileMode -> Bool
+  hasGroupPermissions fm' = fm' `hasPermission` groupModes
+#endif
+
 
 createDiffusionArguments
   :: SocketOrSocketInfo [Socket] [AddrInfo]

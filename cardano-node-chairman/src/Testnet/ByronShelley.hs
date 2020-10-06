@@ -56,6 +56,7 @@ import qualified System.Environment as IO
 import qualified System.FilePath.Posix as FP
 import qualified System.Info as OS
 import qualified System.IO as IO
+import           System.Posix.Files
 import qualified System.Process as IO
 import qualified System.Random as IO
 import qualified Test.Process as H
@@ -354,6 +355,9 @@ testnet H.Conf {..} = do
       , "--verification-key-file", tempAbsPath </> node </> "shelley/vrf.vkey"
       , "--signing-key-file", tempAbsPath </> node </> "shelley/vrf.skey"
       ]
+
+    --TODO: Remove me after #1948 is merged.
+    void . liftIO $ setFileMode (tempAbsPath </> node </> "shelley/vrf.skey") ownerModes
 
   -- Symlink the BFT operator keys from the genesis delegates, for uniformity
   forM_ bftNodesN $ \n -> do

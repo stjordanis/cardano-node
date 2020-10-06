@@ -22,7 +22,9 @@ module Cardano.Node.Types
   , SocketPath(..)
   , TopologyFile(..)
   , ViewMode(..)
+  , VRFPrivateKeyFilePermissionError(..)
   , protocolName
+  , renderVRFPrivateKeyFilePermissionError
   ) where
 
 import           Cardano.Prelude
@@ -305,3 +307,21 @@ protocolName :: Protocol -> String
 protocolName ByronProtocol   = "Byron"
 protocolName ShelleyProtocol = "Shelley"
 protocolName CardanoProtocol = "Byron; Shelley"
+
+
+data VRFPrivateKeyFilePermissionError
+  = OtherPermissionsExist FilePath
+  | GroupPermissionsExist FilePath
+  deriving Show
+
+renderVRFPrivateKeyFilePermissionError :: VRFPrivateKeyFilePermissionError -> Text
+renderVRFPrivateKeyFilePermissionError err =
+  case err of
+    OtherPermissionsExist fp ->
+      "VRF private key file at: " <> Text.pack fp
+      <> " has \"other\" file permissions. Please remove all \"other\" file permissions."
+
+    GroupPermissionsExist fp ->
+      "VRF private key file at: " <> Text.pack fp
+      <> "has \"group\" file permissions. Please remove all \"group\" file permissions."
+
