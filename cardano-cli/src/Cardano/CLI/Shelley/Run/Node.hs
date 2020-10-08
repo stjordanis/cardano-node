@@ -2,7 +2,21 @@ module Cardano.CLI.Shelley.Run.Node
   ( ShelleyNodeCmdError
   , renderShelleyNodeCmdError
   , runNodeCmd
+  , writeTextEnvelopeFileAtomic
   ) where
+
+import           Cardano.Prelude hiding ((<.>))
+import           Prelude (id)
+
+import qualified Control.Exception as Exception
+import           Control.Monad.Trans.Except (ExceptT)
+import           Control.Monad.Trans.Except.Extra (firstExceptT, hoistEither, newExceptT)
+import qualified Data.ByteString.Char8 as BS
+import qualified Data.ByteString.Lazy as LBS
+import qualified Data.Text as Text
+import           System.Directory (removeFile, renameFile)
+import           System.FilePath.Posix (splitFileName, (<.>))
+import           System.IO (hClose, openTempFile)
 
 import           Cardano.Api.TextView (TextViewDescription (..))
 import           Cardano.Api.Typed
@@ -10,13 +24,6 @@ import           Cardano.CLI.Shelley.Commands
 import           Cardano.CLI.Shelley.Key (InputDecodeError, VerificationKeyOrFile,
                      readSigningKeyFileAnyOf, readVerificationKeyOrFile)
 import           Cardano.CLI.Types (SigningKeyFile (..), VerificationKeyFile (..))
-import           Cardano.Prelude
-import           Control.Monad.Trans.Except (ExceptT)
-import           Control.Monad.Trans.Except.Extra (firstExceptT, hoistEither, newExceptT)
-import           Prelude (id)
-
-import qualified Data.ByteString.Char8 as BS
-import qualified Data.Text as Text
 
 {- HLINT ignore "Reduce duplication" -}
 
@@ -25,11 +32,20 @@ data ShelleyNodeCmdError
   | ShelleyNodeCmdReadKeyFileError !(FileError InputDecodeError)
   | ShelleyNodeCmdWriteFileError !(FileError ())
   | ShelleyNodeCmdOperationalCertificateIssueError !OperationalCertIssueError
+  | ShelleyNodeCmdVrfSigningKeyCreationError
+      FilePath
+      -- ^ Target path
+      FilePath
+      -- ^ Temp path
   deriving Show
 
 renderShelleyNodeCmdError :: ShelleyNodeCmdError -> Text
 renderShelleyNodeCmdError err =
   case err of
+    ShelleyNodeCmdBracketError targetPath tempPath ->
+      Text.pack $ "Error creating VRF signing key file. Target path: " <> targetPath
+      <> " Temporary path: " <> tempPath
+
     ShelleyNodeCmdReadFileError fileErr -> Text.pack (displayError fileErr)
 
     ShelleyNodeCmdReadKeyFileError fileErr -> Text.pack (displayError fileErr)
@@ -100,17 +116,25 @@ runNodeKeyGenKES (VerificationKeyFile vkeyPath) (SigningKeyFile skeyPath) = do
     skeyDesc = TextViewDescription "KES Signing Key"
     vkeyDesc = TextViewDescription "KES Verification Key"
 
-writeFileAtomic :: FilePath -> LBS.ByteString -> IO ()
-writeFileAtomic targetPath content = do
-  -- You need a file path and a TextEnvelope
-  let (targetDir, targetFile) = splitFileName targetPath
-  Exception.bracketOnError
-    (openBinaryTempFileWithDefaultPermissions targetDir $ targetFile <.> "tmp")
-    (\(tmpPath, handle) -> hClose handle >> removeFile tmpPath)
-    (\(tmpPath, handle) -> do
-        LBS.hPut handle content
-        hClose handle
-        renameFile tmpPath targetPath)
+writeTextEnvelopeFileAtomic
+  :: HasTextEnvelope a
+  => FilePath
+  -> Maybe TextEnvelopeDescr
+  -> a
+  -> ExceptT ShelleyNodeCmdError IO ()
+writeTextEnvelopeFileAtomic targetPath mbDescr a = do
+  let content = textEnvelopeToJSON mbDescr a
+      (targetDir, targetFile) = splitFileName targetPath
+  liftIO $ Exception.bracketOnError
+             (openTempFile targetDir $ targetFile <.> "tmp")
+             (\(tmpPath, fHandle) -> do
+               hClose fHandle >> removeFile tmpPath
+               return ShelleyNodeCmdVrfSigningKeyCreationError targetPath tmpPath)
+             (\(tmpPath, fHandle) -> do
+                 LBS.hPut fHandle content
+                 hClose fHandle
+                 renameFile tmpPath targetPath)
+  -- TODO: Need to check Vrf private key file permissions with function in #1938
 
 runNodeKeyGenVRF :: VerificationKeyFile -> SigningKeyFile
                  -> ExceptT ShelleyNodeCmdError IO ()
