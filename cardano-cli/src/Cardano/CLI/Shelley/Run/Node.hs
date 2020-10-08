@@ -100,15 +100,28 @@ runNodeKeyGenKES (VerificationKeyFile vkeyPath) (SigningKeyFile skeyPath) = do
     skeyDesc = TextViewDescription "KES Signing Key"
     vkeyDesc = TextViewDescription "KES Verification Key"
 
+writeFileAtomic :: FilePath -> LBS.ByteString -> IO ()
+writeFileAtomic targetPath content = do
+  -- You need a file path and a TextEnvelope
+  let (targetDir, targetFile) = splitFileName targetPath
+  Exception.bracketOnError
+    (openBinaryTempFileWithDefaultPermissions targetDir $ targetFile <.> "tmp")
+    (\(tmpPath, handle) -> hClose handle >> removeFile tmpPath)
+    (\(tmpPath, handle) -> do
+        LBS.hPut handle content
+        hClose handle
+        renameFile tmpPath targetPath)
 
 runNodeKeyGenVRF :: VerificationKeyFile -> SigningKeyFile
                  -> ExceptT ShelleyNodeCmdError IO ()
 runNodeKeyGenVRF (VerificationKeyFile vkeyPath) (SigningKeyFile skeyPath) = do
     skey <- liftIO $ generateSigningKey AsVrfKey
     let vkey = getVerificationKey skey
+    --
     firstExceptT ShelleyNodeCmdWriteFileError
       . newExceptT
       $ writeFileTextEnvelope skeyPath (Just skeyDesc) skey
+    --
     firstExceptT ShelleyNodeCmdWriteFileError
       . newExceptT
       $ writeFileTextEnvelope vkeyPath (Just vkeyDesc) vkey
