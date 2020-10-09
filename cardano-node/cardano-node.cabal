@@ -100,6 +100,7 @@ library
                      , lobemo-backend-trace-forwarder
                      , network
                      , network-mux
+                     , nothunks
                      , cardano-node-config
                      , optparse-applicative
                      , ouroboros-consensus
@@ -177,6 +178,7 @@ library cardano-node-config
                      , iohk-monitoring
                      , iproute
                      , network
+                     , nothunks
                      , optparse-applicative
                      , ouroboros-consensus
                      , ouroboros-consensus-cardano

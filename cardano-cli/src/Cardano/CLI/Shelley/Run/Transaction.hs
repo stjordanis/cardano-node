@@ -3,6 +3,8 @@
 
 {-# OPTIONS_GHC -Wno-incomplete-uni-patterns #-}
 
+-- TODO @node team: add the missing cases
+{-# OPTIONS_GHC -Wno-incomplete-patterns #-}
 module Cardano.CLI.Shelley.Run.Transaction
   ( ShelleyTxCmdError
   , renderShelleyTxCmdError
@@ -32,7 +34,7 @@ import           Ouroboros.Consensus.Cardano.Block (EraMismatch (..),
                      HardForkApplyTxErr (ApplyTxErrByron, ApplyTxErrShelley, ApplyTxErrWrongEra))
 import           Ouroboros.Consensus.Ledger.SupportsMempool (ApplyTxErr)
 import           Ouroboros.Consensus.Shelley.Ledger (ShelleyBlock)
-import           Ouroboros.Consensus.Shelley.Protocol.Crypto (StandardShelley)
+import           Ouroboros.Consensus.Shelley.Eras (StandardShelley)
 
 import           Cardano.CLI.Environment (EnvSocketError, readEnvSocketPath, renderEnvSocketError)
 import           Cardano.CLI.Shelley.Key (InputDecodeError, readSigningKeyFileAnyOf)

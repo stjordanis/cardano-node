@@ -463,7 +463,8 @@ import qualified Cardano.Chain.UTxO as Byron
 --
 -- Shelley imports
 --
-import           Ouroboros.Consensus.Shelley.Protocol.Crypto (StandardCrypto, StandardShelley)
+import           Ouroboros.Consensus.Shelley.Eras (StandardShelley)
+import           Ouroboros.Consensus.Shelley.Protocol.Crypto (StandardCrypto)
 
 import qualified Cardano.Ledger.Crypto as Shelley (DSIGN, KES, VRF)
 
@@ -4498,7 +4499,7 @@ instance Key KesKey where
 
     deterministicSigningKey :: AsType KesKey -> Crypto.Seed -> SigningKey KesKey
     deterministicSigningKey AsKesKey seed =
-        KesSigningKey (Crypto.genKeyKES seed)
+        KesSigningKey (Crypto.genKeyKES (error "TODO @node-team: fix this" seed))
 
     deterministicSigningKeySeedSize :: AsType KesKey -> Word
     deterministicSigningKeySeedSize AsKesKey =

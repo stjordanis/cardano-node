@@ -6,6 +6,8 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE StandaloneDeriving #-}
 
+-- TODO @node team: add the missing cases
+{-# OPTIONS_GHC -Wno-incomplete-patterns #-}
 module Cardano.Api.TxSubmit
   ( submitTx
   , TxForMode(..)
@@ -26,7 +28,8 @@ import           Ouroboros.Consensus.Cardano.Block (CardanoApplyTxErr,
                      HardForkApplyTxErr (ApplyTxErrByron, ApplyTxErrShelley, ApplyTxErrWrongEra))
 import           Ouroboros.Consensus.HardFork.Combinator.Degenerate
 import           Ouroboros.Consensus.Shelley.Ledger (ShelleyBlock, mkShelleyTx)
-import           Ouroboros.Consensus.Shelley.Protocol.Crypto (StandardCrypto, StandardShelley)
+import           Ouroboros.Consensus.Shelley.Eras (StandardShelley)
+import           Ouroboros.Consensus.Shelley.Protocol.Crypto (StandardCrypto)
 
 import           Cardano.Api.TxSubmit.ErrorRender
 import           Cardano.Api.Typed

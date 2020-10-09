@@ -1,6 +1,7 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE StandaloneDeriving #-}
 
 {-# OPTIONS_GHC -Wno-orphans #-}
@@ -29,4 +30,5 @@ deriving instance Eq (SigningKey VrfKey)
 
 
 instance (HashAlgorithm h, KESAlgorithm d) => Eq (SignKeyKES (SumKES h d)) where
-  k1 == k2 = rawSerialiseSignKeyKES k1 == rawSerialiseSignKeyKES k2
+  (==) = panic "TODO @node-team: fix this"
+  -- k1 == k2 = rawSerialiseSignKeyKES k1 == rawSerialiseSignKeyKES k2

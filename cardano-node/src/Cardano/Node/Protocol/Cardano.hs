@@ -24,7 +24,6 @@ import           Prelude
 
 import           Control.Monad.Trans.Except (ExceptT)
 import           Control.Monad.Trans.Except.Extra (firstExceptT)
-import           Data.Maybe (maybeToList)
 import qualified Data.Text as T
 
 import qualified Cardano.Chain.Update as Byron
@@ -38,7 +37,6 @@ import           Ouroboros.Consensus.Cardano.Block (CardanoBlock)
 import           Ouroboros.Consensus.Cardano.Condense ()
 
 import           Ouroboros.Consensus.Shelley.Protocol (StandardCrypto)
-import qualified Shelley.Spec.Ledger.PParams as Shelley
 
 import           Cardano.Node.Types
 
@@ -107,8 +105,7 @@ mkConsensusProtocolCardano NodeByronProtocolConfiguration {
                              npcShelleyGenesisFile,
                              npcShelleyGenesisFileHash,
                              npcShelleySupportedProtocolVersionMajor,
-                             npcShelleySupportedProtocolVersionMinor,
-                             npcShelleyMaxSupportedProtocolVersion
+                             npcShelleySupportedProtocolVersionMinor
                            }
                            NodeHardForkProtocolConfiguration {
                              npcTestShelleyHardForkAtEpoch,
@@ -137,51 +134,81 @@ mkConsensusProtocolCardano NodeByronProtocolConfiguration {
 
     return $!
       Consensus.ProtocolCardano
-        -- Byron parameters
-        byronGenesis
-        (PBftSignatureThreshold <$> npcByronPbftSignatureThresh)
-        (Byron.ProtocolVersion npcByronSupportedProtocolVersionMajor
-                               npcByronSupportedProtocolVersionMinor
-                               npcByronSupportedProtocolVersionAlt)
-        (Byron.SoftwareVersion npcByronApplicationName
-                               npcByronApplicationVersion)
-        (maybeToList byronLeaderCredentials)
+        Consensus.ProtocolParamsByron {
+          byronGenesis = byronGenesis,
+          byronPbftSignatureThreshold =
+            PBftSignatureThreshold <$> npcByronPbftSignatureThresh,
+          byronProtocolVersion =
+            Byron.ProtocolVersion
+              npcByronSupportedProtocolVersionMajor
+              npcByronSupportedProtocolVersionMinor
+              npcByronSupportedProtocolVersionAlt,
+          byronSoftwareVersion =
+            Byron.SoftwareVersion
+              npcByronApplicationName
+              npcByronApplicationVersion,
+          byronLeaderCredentials =
+            byronLeaderCredentials
+        }
+        Consensus.ProtocolParamsShelley {
+          shelleyGenesis = shelleyGenesis,
+          shelleyInitialNonce =
+            Shelley.genesisHashToPraosNonce shelleyGenesisHash,
+          shelleyProtVer =
+            ProtVer
+              npcShelleySupportedProtocolVersionMajor
+              npcShelleySupportedProtocolVersionMinor,
+          shelleyLeaderCredentials =
+            shelleyLeaderCredentials
+        }
+        Consensus.ProtocolParamsAllegra {
+          allegraProtVer = error "TODO @node team: get from config file",
+          -- TODO @node team: get from config file
+          allegraLeaderCredentials = Nothing
+        }
+        Consensus.ProtocolParamsMary {
+          maryProtVer = error "TODO @node team: get from config file",
+          -- TODO @node team: get from config file
+          maryLeaderCredentials = Nothing
+        }
+        -- Byron to Shelley hard fork parameters
+        Consensus.ProtocolParamsTransition {
+          transitionLowerBound = npcShelleyHardForkNotBeforeEpoch,
+          transitionTrigger =
+            -- What will trigger the Byron->Shelley hard fork?
+            case npcTestShelleyHardForkAtEpoch of
 
-        -- Shelley parameters
-        shelleyGenesis
-        (Shelley.genesisHashToPraosNonce shelleyGenesisHash)
-        (Shelley.ProtVer npcShelleySupportedProtocolVersionMajor
-                         npcShelleySupportedProtocolVersionMinor)
-        (MaxMajorProtVer npcShelleyMaxSupportedProtocolVersion)
-        (maybeToList shelleyLeaderCredentials)
+               -- This specifies the major protocol version number update that will
+               -- trigger us moving to the Shelley protocol.
+               --
+               -- Version 0 is Byron with Ouroboros classic
+               -- Version 1 is Byron with Ouroboros Permissive BFT
+               -- Version 2 is Shelley
+               --
+               -- But we also provide an override to allow for simpler test setups
+               -- such as triggering at the 0 -> 1 transition .
+               --
+               Nothing -> Consensus.TriggerHardForkAtVersion
+                            (maybe 2 fromIntegral npcTestShelleyHardForkAtVersion)
 
-        -- Hard fork parameters
-        npcShelleyHardForkNotBeforeEpoch
-
-        -- What will trigger the Byron->Shelley hard fork?
-        (case npcTestShelleyHardForkAtEpoch of
-
-           -- This specifies the major protocol version number update that will
-           -- trigger us moving to the Shelley protocol.
-           --
-           -- Version 0 is Byron with Ouroboros classic
-           -- Version 1 is Byron with Ouroboros Permissive BFT
-           -- Version 2 is Shelley
-           --
-           -- But we also provide an override to allow for simpler test setups
-           -- such as triggering at the 0 -> 1 transition .
-           --
-           Nothing -> Consensus.TriggerHardForkAtVersion
-                        (maybe 2 fromIntegral npcTestShelleyHardForkAtVersion)
-
-           -- Alternatively, for testing we can transition at a specific epoch.
-           --
-           Just epochNo -> Consensus.TriggerHardForkAtEpoch epochNo)
-
-        -- What will trigger the Shelley->Next hard fork?
-        --TODO: extended the config to allow specifying this too
-        (Consensus.TriggerHardForkAtVersion 3)
-
+               -- Alternatively, for testing we can transition at a specific epoch.
+               --
+               Just epochNo -> Consensus.TriggerHardForkAtEpoch epochNo
+        }
+        -- Shelley to Allegra hard fork parameters
+        Consensus.ProtocolParamsTransition {
+          -- TODO @node team: get from config file
+          transitionLowerBound = Nothing,
+          -- TODO @node team: same logic as bove?
+          transitionTrigger = Consensus.TriggerHardForkAtVersion 3
+        }
+        -- Allegra to Mary hard fork parameters
+        Consensus.ProtocolParamsTransition {
+          -- TODO @node team: get from config file
+          transitionLowerBound = Nothing,
+          -- TODO @node team: same logic as bove?
+          transitionTrigger = Consensus.TriggerHardForkAtVersion 4
+        }
 
 ------------------------------------------------------------------------------
 -- Errors

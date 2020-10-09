@@ -295,6 +295,10 @@ data NodeShelleyProtocolConfiguration =
        -- | The maximum major version of the protocol this node supports.
        -- If the actual version ever goes higher than this then the node
        -- will stop with an appropriate error message.
+       --
+       -- TODO @node team: this is no longer needed. We now use the major
+       -- protocol version of the last era. Or do we want this to be
+       -- configurable after all?
      , npcShelleyMaxSupportedProtocolVersion :: !Natural
      }
   deriving (Eq, Show)
