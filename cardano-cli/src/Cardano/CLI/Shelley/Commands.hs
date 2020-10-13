@@ -43,6 +43,7 @@ module Cardano.CLI.Shelley.Commands
   , BlockId (..)
   , WitnessSigningData (..)
   , ColdVerificationKeyOrFile (..)
+  , OutputFormatOption (..)
   ) where
 
 import           Data.Text (Text)
@@ -54,8 +55,8 @@ import           Cardano.Api.Typed hiding (PoolId)
 
 import           Ouroboros.Consensus.BlockchainTime (SystemStart (..))
 
-import           Cardano.CLI.Shelley.Key (VerificationKeyOrFile, VerificationKeyOrHashOrFile,
-                     VerificationKeyTextOrFile)
+import           Cardano.CLI.Shelley.Key (OutputDirection, VerificationKeyOrFile,
+                     VerificationKeyOrHashOrFile, VerificationKeyTextOrFile)
 import           Cardano.CLI.Types
 
 import           Shelley.Spec.Ledger.TxBody (MIRPot)
@@ -247,7 +248,7 @@ data PoolCmd
       EpochNo
       -- ^ Epoch in which to retire the stake pool.
       OutputFile
-  | PoolGetId (VerificationKeyOrFile StakePoolKey) OutputFormat
+  | PoolGetId (VerificationKeyOrFile StakePoolKey) OutputFormatOption OutputDirection
   | PoolMetaDataHash PoolMetaDataFile (Maybe OutputFile)
   deriving (Eq, Show)
 
@@ -464,4 +465,11 @@ data ColdVerificationKeyOrFile
   = ColdStakePoolVerificationKey !(VerificationKey StakePoolKey)
   | ColdGenesisDelegateVerificationKey !(VerificationKey GenesisDelegateKey)
   | ColdVerificationKeyFile !VerificationKeyFile
+  deriving (Eq, Show)
+
+-- | Output format option for CLI parsing.
+data OutputFormatOption
+  = OutputFormatOptionBech32
+  | OutputFormatOptionHex
+  | OutputFormatOptionTextEnvelope
   deriving (Eq, Show)

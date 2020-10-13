@@ -7,7 +7,6 @@ module Cardano.CLI.Shelley.Run.Pool
 import           Cardano.Prelude
 
 import qualified Data.Text as Text
-import qualified Data.Text.IO as Text
 
 import           Control.Monad.Trans.Except (ExceptT)
 import           Control.Monad.Trans.Except.Extra (firstExceptT, handleIOExceptT, hoistEither,
@@ -21,9 +20,8 @@ import           Cardano.Api.Typed
 import qualified Shelley.Spec.Ledger.Slot as Shelley
 
 import           Cardano.CLI.Shelley.Commands
-import           Cardano.CLI.Shelley.Key (InputDecodeError, VerificationKeyOrFile,
-                     readVerificationKeyOrFile)
-import           Cardano.CLI.Types (OutputFormat (..))
+import           Cardano.CLI.Shelley.Key (InputDecodeError, OutputDirection, OutputFormat (..),
+                     VerificationKeyOrFile, readVerificationKeyOrFile, serialiseInputAndWrite)
 
 
 data ShelleyPoolCmdError
@@ -31,6 +29,7 @@ data ShelleyPoolCmdError
   | ShelleyPoolCmdReadKeyFileError !(FileError InputDecodeError)
   | ShelleyPoolCmdWriteFileError !(FileError ())
   | ShelleyPoolCmdMetaDataValidationError !StakePoolMetadataValidationError
+  | ShelleyPoolCmdOutputFormatError !OutputFormatError
   deriving Show
 
 renderShelleyPoolCmdError :: ShelleyPoolCmdError -> Text
@@ -41,6 +40,8 @@ renderShelleyPoolCmdError err =
     ShelleyPoolCmdWriteFileError fileErr -> Text.pack (displayError fileErr)
     ShelleyPoolCmdMetaDataValidationError validationErr ->
       "Error validating stake pool metadata: " <> Text.pack (displayError validationErr)
+    ShelleyPoolCmdOutputFormatError outputFormatErr ->
+      renderOutputFormatError outputFormatErr
 
 
 
@@ -49,7 +50,8 @@ runPoolCmd (PoolRegistrationCert sPvkey vrfVkey pldg pCost pMrgn rwdVerFp ownerV
   runStakePoolRegistrationCert sPvkey vrfVkey pldg pCost pMrgn rwdVerFp ownerVerFps relays mbMetadata network outfp
 runPoolCmd (PoolRetirementCert sPvkeyFp retireEpoch outfp) =
   runStakePoolRetirementCert sPvkeyFp retireEpoch outfp
-runPoolCmd (PoolGetId sPvkey outputFormat) = runPoolId sPvkey outputFormat
+runPoolCmd (PoolGetId sPvkey outputFormat outputDirection) =
+  runPoolId sPvkey outputFormat outputDirection
 runPoolCmd (PoolMetaDataHash poolMdFile mOutFile) = runPoolMetaDataHash poolMdFile mOutFile
 
 
@@ -166,20 +168,41 @@ runStakePoolRetirementCert stakePoolVerKeyOrFile retireEpoch (OutputFile outfp) 
     retireCertDesc :: TextViewDescription
     retireCertDesc = TextViewDescription "Stake Pool Retirement Certificate"
 
+data OutputFormatError = OutputFormatNotSupportedError
+  deriving (Eq, Show)
+
+-- | Render an error message for an 'OutputFormatError'.
+renderOutputFormatError :: OutputFormatError -> Text
+renderOutputFormatError OutputFormatNotSupportedError =
+  "This command does not support the provided output format."
+
 runPoolId
   :: VerificationKeyOrFile StakePoolKey
-  -> OutputFormat
+  -> OutputFormatOption
+  -> OutputDirection
   -> ExceptT ShelleyPoolCmdError IO ()
-runPoolId verKeyOrFile outputFormat = do
+runPoolId verKeyOrFile outputFormat outputDirection = do
     stakePoolVerKey <- firstExceptT ShelleyPoolCmdReadKeyFileError
       . newExceptT
       $ readVerificationKeyOrFile AsStakePoolKey verKeyOrFile
-    liftIO $
-      case outputFormat of
-        OutputFormatHex ->
-          BS.putStrLn $ serialiseToRawBytesHex (verificationKeyHash stakePoolVerKey)
-        OutputFormatBech32 ->
-          Text.putStrLn $ serialiseToBech32 (verificationKeyHash stakePoolVerKey)
+    typedOutputFormat <- firstExceptT ShelleyPoolCmdOutputFormatError
+      . hoistEither
+      $ toTypedOutputFormat outputFormat
+    firstExceptT ShelleyPoolCmdWriteFileError
+      . newExceptT
+      $ serialiseInputAndWrite
+          typedOutputFormat
+          outputDirection
+          (verificationKeyHash stakePoolVerKey)
+  where
+    toTypedOutputFormat
+      :: OutputFormatOption
+      -> Either OutputFormatError (OutputFormat (Hash StakePoolKey))
+    toTypedOutputFormat outputFormatOpt =
+      case outputFormatOpt of
+        OutputFormatOptionBech32 -> Right OutputFormatBech32
+        OutputFormatOptionHex -> Right OutputFormatHex
+        OutputFormatOptionTextEnvelope -> Left OutputFormatNotSupportedError
 
 runPoolMetaDataHash :: PoolMetaDataFile -> Maybe OutputFile -> ExceptT ShelleyPoolCmdError IO ()
 runPoolMetaDataHash (PoolMetaDataFile poolMDPath) mOutFile = do

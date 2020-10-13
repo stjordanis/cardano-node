@@ -5,7 +5,6 @@ module Cardano.CLI.Types
   ( CBORObject (..)
   , CertificateFile (..)
   , GenesisFile (..)
-  , OutputFormat (..)
   , QueryFilter (..)
   , SigningKeyFile (..)
   , SigningKeyOrScriptFile (..)
@@ -47,12 +46,6 @@ instance FromJSON GenesisFile where
   parseJSON (String genFp) = pure . GenesisFile $ Text.unpack genFp
   parseJSON invalid = panic $ "Parsing of GenesisFile failed due to type mismatch. "
                            <> "Encountered: " <> Text.pack (show invalid)
-
--- | The desired output format.
-data OutputFormat
-  = OutputFormatHex
-  | OutputFormatBech32
-  deriving (Eq, Show)
 
 -- | UTxO query filtering options.
 data QueryFilter
