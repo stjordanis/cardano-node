@@ -16,9 +16,9 @@ import           Control.Monad.Trans.Except.Extra (firstExceptT, newExceptT)
 import           Cardano.Api.TextView (TextViewDescription (..))
 import           Cardano.Api.Typed
 
-import           Cardano.CLI.Shelley.Key (InputDecodeError, VerificationKeyOrFile,
-                     VerificationKeyOrHashOrFile, readVerificationKeyOrFile,
-                     readVerificationKeyOrHashOrFile)
+import           Cardano.CLI.Shelley.Key (InputDecodeError, OutputDirection (..), OutputFormat (..),
+                     VerificationKeyOrFile, VerificationKeyOrHashOrFile, readVerificationKeyOrFile,
+                     readVerificationKeyOrHashOrFile, serialiseInputAndWrite)
 import           Cardano.CLI.Shelley.Parsers
 import           Cardano.CLI.Types
 
@@ -43,7 +43,7 @@ renderShelleyStakeAddressCmdError err =
 
 
 runStakeAddressCmd :: StakeAddressCmd -> ExceptT ShelleyStakeAddressCmdError IO ()
-runStakeAddressCmd (StakeAddressKeyGen vk sk) = runStakeAddressKeyGen vk sk
+runStakeAddressCmd (StakeAddressKeyGen ofo vk sk) = runStakeAddressKeyGen ofo vk sk
 runStakeAddressCmd (StakeAddressKeyHash vk mOutputFp) = runStakeAddressKeyHash vk mOutputFp
 runStakeAddressCmd (StakeAddressBuild vk nw mOutputFp) = runStakeAddressBuild vk nw mOutputFp
 runStakeAddressCmd (StakeKeyRegistrationCert stkKeyVerKeyOrFp outputFp) =
@@ -58,20 +58,36 @@ runStakeAddressCmd (StakeKeyDeRegistrationCert stkKeyVerKeyOrFp outputFp) =
 -- Stake address command implementations
 --
 
-runStakeAddressKeyGen :: VerificationKeyFile -> SigningKeyFile -> ExceptT ShelleyStakeAddressCmdError IO ()
-runStakeAddressKeyGen (VerificationKeyFile vkFp) (SigningKeyFile skFp) = do
+runStakeAddressKeyGen :: OutputFormatOption -> VerificationKeyFile -> SigningKeyFile -> ExceptT ShelleyStakeAddressCmdError IO ()
+runStakeAddressKeyGen outFmtOpt (VerificationKeyFile vkFp) (SigningKeyFile skFp) = do
     skey <- liftIO $ generateSigningKey AsStakeKey
     let vkey = getVerificationKey skey
     firstExceptT ShelleyStakeAddressCmdWriteFileError
       . newExceptT
-      $ writeFileTextEnvelope skFp (Just skeyDesc) skey
+      $ serialiseInputAndWrite
+          typedOutputFormat
+          (OutputDirectionFile skFp)
+          skey
     firstExceptT ShelleyStakeAddressCmdWriteFileError
       . newExceptT
-      $ writeFileTextEnvelope vkFp (Just vkeyDesc) vkey
+      $ serialiseInputAndWrite
+          typedOutputFormat
+          (OutputDirectionFile vkFp)
+          vkey
   where
-    skeyDesc, vkeyDesc :: TextViewDescription
-    skeyDesc = TextViewDescription "Stake Signing Key"
-    vkeyDesc = TextViewDescription "Stake Verification Key"
+    -- TODO @intricate: Don't forget to use these.
+    _skeyDesc, _vkeyDesc :: TextViewDescription
+    _skeyDesc = TextViewDescription "Stake Signing Key"
+    _vkeyDesc = TextViewDescription "Stake Verification Key"
+
+    typedOutputFormat
+      :: (SerialiseAsBech32 a, HasTextEnvelope a)
+      => OutputFormat a
+    typedOutputFormat =
+      case outFmtOpt of
+        OutputFormatOptionBech32 -> OutputFormatBech32
+        OutputFormatOptionHex -> OutputFormatHex
+        OutputFormatOptionTextEnvelope -> OutputFormatTextEnvelope
 
 runStakeAddressKeyHash
   :: VerificationKeyOrFile StakeKey

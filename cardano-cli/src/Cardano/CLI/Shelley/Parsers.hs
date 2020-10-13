@@ -217,7 +217,8 @@ pStakeAddress =
   where
     pStakeAddressKeyGen :: Parser StakeAddressCmd
     pStakeAddressKeyGen = StakeAddressKeyGen
-                            <$> pVerificationKeyFile Output
+                            <$> pOutputFormatOption
+                            <*> pVerificationKeyFile Output
                             <*> pSigningKeyFile Output
 
     pStakeAddressKeyHash :: Parser StakeAddressCmd
