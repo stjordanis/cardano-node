@@ -35,11 +35,6 @@ import           System.Environment (lookupEnv)
 
 import           Cardano.BM.Data.Aggregated (Measurable (..))
 import           Paths_cardano_node (version)
-#ifdef UNIX
-import qualified Cardano.BM.Configuration.Model as CM
-import           Cardano.BM.Data.Backend
-import           Cardano.BM.Data.BackendKind (BackendKind (..))
-#endif
 import           Cardano.BM.Data.LogItem (LOContent (..), PrivacyAnnotation (..), mkLOMeta)
 import           Cardano.BM.Data.Tracer (ToLogObject (..), TracingVerbosity (..))
 import           Cardano.BM.Data.Transformers (setHostname)
@@ -85,10 +80,6 @@ import           Cardano.Node.Protocol (SomeConsensusProtocol (..), mkConsensusP
 import           Cardano.Tracing.Kernel
 import           Cardano.Tracing.Peer
 import           Cardano.Tracing.Tracers
-#ifdef UNIX
-import           Cardano.Node.Run.Trace (checkLiveViewRequiredTracers)
-import           Cardano.Node.TUI.Run
-#endif
 
 {- HLINT ignore "Use fewer imports" -}
 
@@ -124,12 +115,6 @@ runNode cmdPc = do
         Left err -> putTextLn (renderProtocolInstantiationError err) >> exitFailure
         Right (SomeConsensusProtocol p) -> pure $ SomeConsensusProtocol p
 
-#ifdef UNIX
-    let viewmode = ncViewMode nc
-#else
-    let viewmode = SimpleView
-#endif
-
     upTimeThread <- Async.async $ traceNodeUpTime (appendName "metrics" trace) =<< getMonotonicTimeNSec
 
     -- This IORef contains node kernel structure which holds node kernel.
@@ -138,44 +123,11 @@ runNode cmdPc = do
 
     tracers <- mkTracers (ncTraceConfig nc) trace nodeKernelData
 
-    case viewmode of
-      SimpleView -> do
-        peersThread <- Async.async $ handlePeersListSimple trace nodeKernelData
-        handleSimpleNode p trace tracers nc (setNodeKernel nodeKernelData)
-        Async.uninterruptibleCancel upTimeThread
-        Async.uninterruptibleCancel peersThread
+    peersThread <- Async.async $ handlePeersListSimple trace nodeKernelData
+    handleSimpleNode p trace tracers nc (setNodeKernel nodeKernelData)
+    Async.uninterruptibleCancel upTimeThread
+    Async.uninterruptibleCancel peersThread
 
-      LiveView -> do
-#ifdef UNIX
-        let c = llConfiguration loggingLayer
-
-        -- check required tracers are turned on
-        checkLiveViewRequiredTracers (ncTraceConfig nc)
-
-        -- We run 'handleSimpleNode' as usual and run TUI thread as well.
-        -- turn off logging to the console, only forward it through a pipe to a central logging process
-        CM.setDefaultBackends c [KatipBK, TraceForwarderBK, UserDefinedBK "LiveViewBackend"]
-
-        be :: LiveViewBackend blk Text <- realize c
-        let lvbe = MkBackend { bEffectuate = effectuate be, bUnrealize = unrealize be }
-        llAddBackend loggingLayer lvbe (UserDefinedBK "LiveViewBackend")
-        liveViewPostSetup be nc
-        captureCounters be trace
-
-        -- User will see a terminal graphics and will be able to interact with it.
-        nodeThread <- Async.async $ handleSimpleNode p trace tracers nc
-                       (setNodeKernel nodeKernelData)
-        setNodeThread be nodeThread
-
-        peersThread <- Async.async $ handlePeersList trace nodeKernelData be
-
-        void $ Async.waitAny [nodeThread, upTimeThread, peersThread]
-#else
-        peersThread <- Async.async $ handlePeersListSimple trace nodeKernelData
-        handleSimpleNode p trace tracers nc (const $ pure ())
-        Async.uninterruptibleCancel upTimeThread
-        Async.uninterruptibleCancel peersThread
-#endif
     shutdownLoggingLayer loggingLayer
 
 logTracingVerbosity :: NodeConfiguration -> Tracer IO String -> IO ()
@@ -219,22 +171,6 @@ traceNodeUpTime tr nodeLaunchTime = do
   traceNamedObject tr (meta, LogValue "upTime" (Nanoseconds upTimeInNs))
   threadDelay 1000000
   traceNodeUpTime tr nodeLaunchTime
-
-#ifdef UNIX
--- | Every 2 seconds get the current peers list and store it to LiveViewBackend
---   (if it's activated) and trace it (for example, for forwarding to an external process).
-handlePeersList
-  :: NFData a
-  => Trace IO Text
-  -> NodeKernelData blk
-  -> LiveViewBackend blk a
-  -> IO ()
-handlePeersList tr nodeKern lvbe = forever $ do
-  peers <- getCurrentPeers nodeKern
-  storePeersInLiveView peers lvbe
-  tracePeers tr peers
-  threadDelay 2000000 -- 2 seconds.
-#endif
 
 handlePeersListSimple
   :: Trace IO Text
