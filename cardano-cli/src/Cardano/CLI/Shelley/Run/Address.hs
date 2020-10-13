@@ -1,3 +1,4 @@
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE RankNTypes #-}
 
 module Cardano.CLI.Shelley.Run.Address
@@ -21,11 +22,13 @@ import           Control.Monad.Trans.Except.Extra (firstExceptT, handleIOExceptT
 import           Cardano.Api.TextView (TextViewDescription (..))
 import           Cardano.Api.Typed
 
-import           Cardano.CLI.Shelley.Key (InputDecodeError, VerificationKeyOrFile,
-                     VerificationKeyTextOrFile, VerificationKeyTextOrFileError (..),
-                     readVerificationKeyOrFile, readVerificationKeyTextOrFileAnyOf,
-                     renderVerificationKeyTextOrFileError)
-import           Cardano.CLI.Shelley.Parsers (AddressCmd (..), AddressKeyType (..), OutputFile (..))
+import           Cardano.CLI.Shelley.Key (InputDecodeError, OutputDirection (..), OutputFormat (..),
+                     VerificationKeyOrFile, VerificationKeyTextOrFile,
+                     VerificationKeyTextOrFileError (..), readVerificationKeyOrFile,
+                     readVerificationKeyTextOrFileAnyOf, renderVerificationKeyTextOrFileError,
+                     serialiseInputAndWrite)
+import           Cardano.CLI.Shelley.Parsers (AddressCmd (..), AddressKeyType (..), OutputFile (..),
+                     OutputFormatOption (..))
 import           Cardano.CLI.Shelley.Run.Address.Info (ShelleyAddressInfoError, runAddressInfo)
 import           Cardano.CLI.Types
 
@@ -55,17 +58,18 @@ renderShelleyAddressCmdError err =
 runAddressCmd :: AddressCmd -> ExceptT ShelleyAddressCmdError IO ()
 runAddressCmd cmd =
   case cmd of
-    AddressKeyGen kt vkf skf -> runAddressKeyGen kt vkf skf
+    AddressKeyGen kt ofo vkf skf -> runAddressKeyGen kt ofo vkf skf
     AddressKeyHash vkf mOFp -> runAddressKeyHash vkf mOFp
     AddressBuild payVk stkVk nw mOutFp -> runAddressBuild payVk stkVk nw mOutFp
     AddressBuildMultiSig sFp nId mOutFp -> runAddressBuildScript sFp nId mOutFp
     AddressInfo txt mOFp -> firstExceptT ShelleyAddressCmdAddressInfoError $ runAddressInfo txt mOFp
 
 runAddressKeyGen :: AddressKeyType
+                 -> OutputFormatOption
                  -> VerificationKeyFile
                  -> SigningKeyFile
                  -> ExceptT ShelleyAddressCmdError IO ()
-runAddressKeyGen kt (VerificationKeyFile vkeyPath) (SigningKeyFile skeyPath) =
+runAddressKeyGen kt outFmtOpt (VerificationKeyFile vkeyPath) (SigningKeyFile skeyPath) =
     case kt of
       AddressKeyShelley         -> generateAndWriteKeyFiles AsPaymentKey
       AddressKeyShelleyExtended -> generateAndWriteKeyFiles AsPaymentExtendedKey
@@ -76,14 +80,27 @@ runAddressKeyGen kt (VerificationKeyFile vkeyPath) (SigningKeyFile skeyPath) =
       let vkey = getVerificationKey skey
       firstExceptT ShelleyAddressCmdWriteFileError
         . newExceptT
-        $ writeFileTextEnvelope skeyPath (Just skeyDesc) skey
+        $ serialiseInputAndWrite
+            (toTypedOutputFormat asType)
+            (OutputDirectionFile skeyPath)
+            skey
       firstExceptT ShelleyAddressCmdWriteFileError
         . newExceptT
-        $ writeFileTextEnvelope vkeyPath (Just vkeyDesc) vkey
+        $ serialiseInputAndWrite
+            (toTypedOutputFormat asType)
+            (OutputDirectionFile vkeyPath)
+            vkey
 
-    skeyDesc, vkeyDesc :: TextViewDescription
-    skeyDesc = TextViewDescription "Payment Signing Key"
-    vkeyDesc = TextViewDescription "Payment Verification Key"
+    -- TODO @intricate: Don't forget to use these.
+    _skeyDesc, _vkeyDesc :: TextViewDescription
+    _skeyDesc = TextViewDescription "Payment Signing Key"
+    _vkeyDesc = TextViewDescription "Payment Verification Key"
+
+    toTypedOutputFormat _asType =
+      case outFmtOpt of
+        OutputFormatOptionBech32 -> OutputFormatBech32
+        OutputFormatOptionHex -> OutputFormatHex
+        OutputFormatOptionTextEnvelope -> OutputFormatTextEnvelope
 
 
 runAddressKeyHash :: VerificationKeyTextOrFile

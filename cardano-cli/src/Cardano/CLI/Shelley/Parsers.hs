@@ -132,6 +132,7 @@ pAddressCmd =
   where
     pAddressKeyGen :: Parser AddressCmd
     pAddressKeyGen = AddressKeyGen <$> pAddressKeyType
+                                   <*> pOutputFormatOption
                                    <*> pVerificationKeyFile Output
                                    <*> pSigningKeyFile Output
 
