@@ -200,9 +200,9 @@ renderTransactionCmd cmd =
     TxGetTxId {} -> "transaction txid"
 
 data NodeCmd
-  = NodeKeyGenCold VerificationKeyFile SigningKeyFile OpCertCounterFile
-  | NodeKeyGenKES  VerificationKeyFile SigningKeyFile
-  | NodeKeyGenVRF  VerificationKeyFile SigningKeyFile
+  = NodeKeyGenCold OutputFormatOption VerificationKeyFile SigningKeyFile OpCertCounterFile
+  | NodeKeyGenKES  OutputFormatOption VerificationKeyFile SigningKeyFile
+  | NodeKeyGenVRF  OutputFormatOption VerificationKeyFile SigningKeyFile
   | NodeKeyHashVRF  (VerificationKeyOrFile VrfKey) (Maybe OutputFile)
   | NodeNewCounter ColdVerificationKeyOrFile Word OpCertCounterFile
   | NodeIssueOpCert (VerificationKeyOrFile KesKey) SigningKeyFile OpCertCounterFile

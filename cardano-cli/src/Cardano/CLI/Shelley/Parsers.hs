@@ -573,17 +573,24 @@ pNodeCmd =
   where
     pKeyGenOperator :: Parser NodeCmd
     pKeyGenOperator =
-      NodeKeyGenCold <$> pColdVerificationKeyFile
+      NodeKeyGenCold <$> pOutputFormatOption
+                     <*> pColdVerificationKeyFile
                      <*> pColdSigningKeyFile
                      <*> pOperatorCertIssueCounterFile
 
     pKeyGenKES :: Parser NodeCmd
     pKeyGenKES =
-      NodeKeyGenKES <$> pVerificationKeyFile Output <*> pSigningKeyFile Output
+      NodeKeyGenKES
+        <$> pOutputFormatOption
+        <*> pVerificationKeyFile Output
+        <*> pSigningKeyFile Output
 
     pKeyGenVRF :: Parser NodeCmd
     pKeyGenVRF =
-      NodeKeyGenVRF <$> pVerificationKeyFile Output <*> pSigningKeyFile Output
+      NodeKeyGenVRF
+        <$> pOutputFormatOption
+        <*> pVerificationKeyFile Output
+        <*> pSigningKeyFile Output
 
     pKeyHashVRF :: Parser NodeCmd
     pKeyHashVRF =
